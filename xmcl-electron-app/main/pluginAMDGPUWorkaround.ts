@@ -35,8 +35,10 @@ export const pluginAMDGPUWorkaround: LauncherAppPlugin = async (app) => {
         // Only apply to client-side launches
         if (payload.side === 'server') return
 
+        log('AMD GPU Workaround middleware triggered')
+
         // Remove problematic system properties that cause runtime native extraction
-        // These properties trigger the AMD driver bug with Sodium
+        // These properties trigger the AMD driver bug with Sodium AND RTSS hanging issues
         const problematicProperties = [
           '-Djna.tmpdir=',
           '-Dorg.lwjgl.system.SharedLibraryExtractPath=',
@@ -47,15 +49,37 @@ export const pluginAMDGPUWorkaround: LauncherAppPlugin = async (app) => {
           payload.options.extraJVMArgs = []
         }
 
-        // Filter out problematic arguments
-        const originalCount = payload.options.extraJVMArgs.length
+        // Filter out problematic arguments from extraJVMArgs
+        const originalExtraCount = payload.options.extraJVMArgs.length
         payload.options.extraJVMArgs = payload.options.extraJVMArgs.filter((arg) => {
           return !problematicProperties.some(prop => arg.startsWith(prop))
         })
 
-        const removed = originalCount - payload.options.extraJVMArgs.length
-        if (removed > 0) {
-          log(`Removed ${removed} runtime native extraction properties for AMD GPU compatibility`)
+        const removedExtra = originalExtraCount - payload.options.extraJVMArgs.length
+
+        // CRITICAL: Also filter version.arguments.jvm which contains these properties
+        if ('arguments' in payload.version && payload.version.arguments?.jvm) {
+          const originalJvmCount = payload.version.arguments.jvm.length
+          payload.version.arguments.jvm = payload.version.arguments.jvm.filter((arg) => {
+            if (typeof arg === 'string') {
+              return !problematicProperties.some(prop => arg.startsWith(prop))
+            }
+            // Keep rule-based arguments as-is
+            return true
+          })
+          const removedJvm = originalJvmCount - payload.version.arguments.jvm.length
+          
+          if (removedJvm > 0) {
+            log(`Removed ${removedJvm} runtime native extraction properties from version JVM args`)
+          }
+        }
+
+        if (removedExtra > 0) {
+          log(`Removed ${removedExtra} runtime native extraction properties from extra JVM args`)
+        }
+
+        if (removedExtra === 0 && ('arguments' in payload.version && !payload.version.arguments?.jvm)) {
+          log('No problematic properties found to remove')
         }
       },
     })
