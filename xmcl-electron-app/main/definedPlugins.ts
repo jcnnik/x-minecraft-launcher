@@ -3,6 +3,7 @@ import { pluginAutoUpdate } from './pluginAutoUpdate'
 import { pluginIconProtocol } from './pluginIconProtocol'
 import { pluginNvdiaGPULinux } from './pluginNvdiaGPULinux'
 import { pluginPowerMonitor } from './pluginPowerMonitor'
+import { pluginRTSSWorkaround } from './pluginRTSSWorkaround'
 
 import { pluginApiFallback } from '@xmcl/runtime/app/pluginApiFallback'
 import { pluginCommonProtocol } from '@xmcl/runtime/app/pluginCommonProtocol'
@@ -36,6 +37,7 @@ export const definedPlugins: LauncherAppPlugin[] = [
   pluginDirectLaunch,
   pluginAutoUpdate,
   pluginAMDGPUWorkaround,
+  pluginRTSSWorkaround,
   pluginPowerMonitor,
   pluginIconProtocol,
   pluginApiFallback,

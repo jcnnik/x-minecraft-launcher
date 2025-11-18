@@ -15,10 +15,7 @@ on:
 
 jobs:
   build:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [windows-latest]
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
         with:
@@ -26,9 +23,6 @@ jobs:
       - uses: pnpm/action-setup@v4
         with:
           version: 9.3.0
-      - name: Fix node-gyp and Python
-        if: ${{ runner.os == 'macOS' }}
-        run: python3 -m pip install --break-system-packages --user packaging setuptools
       - name: Use Node.js 20
         uses: actions/setup-node@v4
         with:
@@ -36,11 +30,6 @@ jobs:
           cache: "pnpm"
       - name: Install
         run: pnpm install
-      - name: Setup Linux
-        if: ${{ runner.os == 'Linux' }}
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libarchive-tools
       - name: Restore cached Electron
         id: cache-electron
         uses: actions/cache/restore@v4
@@ -63,7 +52,6 @@ jobs:
           CURSEFORGE_API_KEY: ${{ secrets.CURSEFORGE_API_TOKEN }}
           PUBLISHER: CN=SignPath Foundation, O=SignPath Foundation, L=Lewes, S=Delaware, C=US
       - name: Upload Source Maps
-        if: ${{ runner.os == 'Windows' }}
         uses: actions/upload-artifact@v4
         with:
           name: sourcemap
@@ -71,7 +59,7 @@ jobs:
             xmcl-electron-app/dist/*.js.map
             xmcl-electron-app/dist/renderer/assets/*.js.map
       - name: Upload Unsigned Appx
-        if: ${{ runner.os == 'Windows' && startsWith(github.event.head_commit.message, 'chore(release)') }}
+        if: ${{ startsWith(github.event.head_commit.message, 'chore(release)') }}
         id: upload-artifact
         uses: actions/upload-artifact@v4
         with:
@@ -79,7 +67,7 @@ jobs:
           path: |
             xmcl-electron-app/build/output/*.appx
       - name: Sign Build
-        if: ${{ runner.os == 'Windows' && startsWith(github.event.head_commit.message, 'chore(release)') }}
+        if: ${{ startsWith(github.event.head_commit.message, 'chore(release)') }}
         id: sign
         uses: signpath/github-action-submit-signing-request@v0.4
         continue-on-error: true
@@ -94,7 +82,7 @@ jobs:
           output-artifact-directory: xmcl-electron-app/build/output/
       - name: Check Sign Status
         id: sign-status
-        if: ${{ runner.os == 'Windows' && startsWith(github.event.head_commit.message, 'chore(release)') }}
+        if: ${{ startsWith(github.event.head_commit.message, 'chore(release)') }}
         run: |
           if ("${{ steps.sign.outcome }}" -eq "success") {
             echo "SIGN_SUCCESS=true" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
@@ -102,51 +90,22 @@ jobs:
             echo "SIGN_SUCCESS=false" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           }
       - name: Update Signed Sha256
-        if: ${{ runner.os == 'Windows' && startsWith(github.event.head_commit.message, 'chore(release)') }}
+        if: ${{ startsWith(github.event.head_commit.message, 'chore(release)') }}
         run: |
           pnpm postsign
       - name: Upload Build
         if: ${{ startsWith(github.event.head_commit.message, 'chore(release)') }}
         uses: actions/upload-artifact@v4
         with:
-          name: build-${{ runner.os }}
+          name: build-Windows
           path: |
             xmcl-electron-app/build/output/
       - name: Upload Windows Zip Build
-        if: ${{ runner.os == 'Windows' }}
         uses: actions/upload-artifact@v4
         with:
           name: win-b${{ github.run_number }}
           path: |
             xmcl-electron-app/build/output/win-unpacked/
-      - name: Upload Linux x64 Zip Build
-        if: ${{ runner.os == 'Linux' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: linux-b${{ github.run_number }}-x64
-          path: |
-            xmcl-electron-app/build/output/linux-unpacked/
-      - name: Upload Linux arm64 Zip Build
-        if: ${{ runner.os == 'Linux' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: linux-b${{ github.run_number }}-arm64
-          path: |
-            xmcl-electron-app/build/output/linux-arm64-unpacked/
-      - name: Upload Mac x64 Zip Build
-        if: ${{ runner.os == 'macOS' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: mac-b${{ github.run_number }}-x64
-          path: |
-            xmcl-electron-app/build/output/mac/
-      - name: Upload Mac arm64 Zip Build
-        if: ${{ runner.os == 'macOS' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: mac-b${{ github.run_number }}-arm64
-          path: |
-            xmcl-electron-app/build/output/mac-arm64/
       - name: Save cached Electron
         if: steps.cache-electron.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
