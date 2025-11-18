@@ -7,7 +7,10 @@ import { LaunchService } from '@xmcl/runtime/launch'
  * This addresses the issue where AMD driver version 25.10.2 and higher
  * causes invisible blocks when using Sodium mod in Minecraft.
  * 
- * Fix: Add -Dorg.lwjgl.util.DebugLoader=true to JVM arguments
+ * The problem occurs because certain JVM arguments cause LWJGL/JNA/Netty to extract
+ * natives at runtime, which triggers a bug in AMD's OpenGL driver. The fix is to
+ * remove these properties and rely only on pre-extracted natives via -Djava.library.path.
+ * 
  * Reference: https://github.com/CaffeineMC/sodium/issues/3318
  */
 export const pluginAMDGPUWorkaround: LauncherAppPlugin = async (app) => {
@@ -16,14 +19,14 @@ export const pluginAMDGPUWorkaround: LauncherAppPlugin = async (app) => {
 
   const info = await app.host.getGPUInfo('basic') as any
   const gpus = info?.gpuDevice || []
-  
+
   // Check if AMD GPU is present (vendor ID 4098 = 0x1002)
   const hasAMD = gpus.some((gpu: any) => gpu?.vendorId === 4098)
-  
+
   if (!hasAMD) return
 
   const { log } = app.getLogger('AMDGPUWorkaround')
-  log('Detected AMD GPU on Windows. Applying LWJGL debug loader workaround for Sodium compatibility.')
+  log('Detected AMD GPU on Windows. Applying workaround for driver version 25.10.2+ Sodium compatibility.')
 
   app.registry.get(LaunchService).then((service) => {
     service.registerMiddleware({
@@ -32,16 +35,27 @@ export const pluginAMDGPUWorkaround: LauncherAppPlugin = async (app) => {
         // Only apply to client-side launches
         if (payload.side === 'server') return
 
-        const lwjglDebugFlag = '-Dorg.lwjgl.util.DebugLoader=true'
-        
-        // Check if the flag is already present
+        // Remove problematic system properties that cause runtime native extraction
+        // These properties trigger the AMD driver bug with Sodium
+        const problematicProperties = [
+          '-Djna.tmpdir=',
+          '-Dorg.lwjgl.system.SharedLibraryExtractPath=',
+          '-Dio.netty.native.workdir=',
+        ]
+
         if (!payload.options.extraJVMArgs) {
           payload.options.extraJVMArgs = []
         }
-        
-        if (!payload.options.extraJVMArgs.includes(lwjglDebugFlag)) {
-          payload.options.extraJVMArgs.push(lwjglDebugFlag)
-          log('Added LWJGL debug loader flag for AMD GPU compatibility')
+
+        // Filter out problematic arguments
+        const originalCount = payload.options.extraJVMArgs.length
+        payload.options.extraJVMArgs = payload.options.extraJVMArgs.filter((arg) => {
+          return !problematicProperties.some(prop => arg.startsWith(prop))
+        })
+
+        const removed = originalCount - payload.options.extraJVMArgs.length
+        if (removed > 0) {
+          log(`Removed ${removed} runtime native extraction properties for AMD GPU compatibility`)
         }
       },
     })
